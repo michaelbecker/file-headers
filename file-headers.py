@@ -62,24 +62,63 @@ def make_filename_match(base_name):
     return is_file_match
 
 
+def read_file(filename):
+    f = open(filename, "r")
+    lines = f.readlines()
+    f.close()
+    
+
+def update_header(id_start_of_header, id_end_of_header, new_header)
+    search_for_header = True
+    in_header = False
+
+    for l in lines:
+
+        if search_for_header:
+            match = re.search("/\*", l)
+            if match:
+                search_for_header = False
+                in_header = True
+
+        l = l.rstrip()
+        if in_header:
+            print("H", l, )
+        else:
+            print(":", l, )
+
+        if in_header:
+            match = re.search("\*/", l)
+            if match:
+                in_header = False
+
+
 cpp_match = make_file_extension_match("cpp")
 h_match = make_file_extension_match("h")
 makefile_match = make_filename_match("makefile")
 
 
-print("CPP match")
-file_list = find_all_files(".", cpp_match)
+file_list = find_all_files(".", make_filename_match("main2.cpp"))
 for f in file_list:
     print (f)
+    read_file(f)
 
-print("H match")
-file_list = find_all_files(".", h_match)
-for f in file_list:
-    print (f)
 
-print("makefile match")
-file_list = find_all_files(".", makefile_match)
-for f in file_list:
-    print (f)
+#print("CPP match")
+#file_list = find_all_files(".", cpp_match)
+#for f in file_list:
+#    print (f)
+#    read_file(f)
+
+#print("H match")
+#file_list = find_all_files(".", h_match)
+#for f in file_list:
+#    print (f)
+
+#print("makefile match")
+#file_list = find_all_files(".", makefile_match)
+#for f in file_list:
+#    print (f)
+
+
 
 
