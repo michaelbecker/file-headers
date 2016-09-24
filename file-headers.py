@@ -1,4 +1,32 @@
 #!/usr/bin/python3
+#############################################################################
+#
+# MIT License
+# 
+# Copyright (c) 2016, Michael Becker (michael.f.becker@gmail.com)
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a 
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+# and/or sell copies of the Software, and to permit persons to whom the 
+# Software is furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included 
+# in all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS 
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT 
+# OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR 
+# THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
+#############################################################################
+"""
+Script to recursively update a set of files' headers.
+"""
 import os
 import re
 import sys
@@ -8,8 +36,11 @@ import argparse
 def find_all_files(directory, filename_filter = None, dirname_filter = None):
     """ Return a list of all normal files in the directory
         as well as all subdirs. This performs a breath first 
-        search.
+        search because, well, I've never programed one before.
     """
+    
+    # Normalize the initial directory.
+    directory = os.path.realpath(directory)
     original_dir = os.getcwd()
     os.chdir(directory)
     dir_list = []
@@ -85,7 +116,11 @@ def write_file(filename, lines):
 
 
 def strip_header(lines, find_header_start, find_header_end, find_shebang = False):
-    """Remove the header lines from a list of file lines.
+    """ Remove the header lines from a list of file lines.
+        We require that the header start on the _first_ line, 
+        unless there is a shebang and we are looking for it, in 
+        which case it may start on the second line if there is a 
+        shebang.
     """
     search_for_header = True
     in_header = False
@@ -121,7 +156,8 @@ def strip_header(lines, find_header_start, find_header_end, find_shebang = False
 
 
 def insert_new_header(file_lines, new_header, find_shebang = False):
-
+    """ Insert the list of new header lines in the file.
+    """
     new_lines = []
 
     if find_shebang:
@@ -141,93 +177,131 @@ def insert_new_header(file_lines, new_header, find_shebang = False):
 
 
 def print_lines(line):
+    """ Debug utility, just print out the lines.
+    """
     for l in lines:
         l = l.rstrip()
         print(l,)
 
 
-def update_all_cpp_files(start_dir, new_header):
-
+def generate_c_header_finders():
+    """ Generate the header finders for c style files.
+    """
     def find_header_start(line):
-        match = re.search("/\*", line)
+        match = re.search("/\*\*", line)
         if match:
             return True
         else:
             return False
 
     def find_header_end(line):
-        match = re.search("\*/", line)
+        match = re.search("\*\*/", line)
         if match:
             return True
         else:
             return False
 
+    return find_header_start, find_header_end
+
+
+def generate_c_and_cpp_header_finders():
+    """ Generate the header finders for c & c++ style files.
+    """
+    c_style = False
+    cpp_style = False
+
+    def find_header_start(line):
+        nonlocal c_style, cpp_style
+
+        match = re.search("/\*\*", line)
+        if match:
+            c_style = True
+            return True
+        
+        match = re.search("///", line)
+        if match:
+            cpp_style = True
+            return True
+        else:
+            return False
+
+    def find_header_end(line):
+        nonlocal c_style, cpp_style
+        
+        if c_style:
+            match = re.search("\*\*/", line)
+            if match:
+                return True
+            else:
+                return False
+        elif cpp_style:
+            match = re.search("///", line)
+            if match:
+                return True
+            else:
+                return False
+        else:
+            return False
+
+    return find_header_start, find_header_end
+
+
+def update_all_cpp_files(start_dir, new_header):
+    """ Handle c++ source files.
+    """
+    start, end = generate_c_and_cpp_header_finders()
+
     file_list = find_all_files(start_dir, make_file_extension_match("cpp"))
     for f in file_list:
         lines = read_file(f)
-        lines = strip_header(lines, find_header_start, find_header_end)
+        lines = strip_header(lines, start, end)
+        lines = insert_new_header(lines, new_header)
+        write_file(f, lines)
+
+
+def update_all_hpp_files(start_dir, new_header):
+    """ Handle c++ header files.
+    """
+    start, end = generate_c_and_cpp_header_finders()
+
+    file_list = find_all_files(start_dir, make_file_extension_match("hpp"))
+    for f in file_list:
+        lines = read_file(f)
+        lines = strip_header(lines, start, end)
         lines = insert_new_header(lines, new_header)
         write_file(f, lines)
 
 
 def update_all_c_files(start_dir, new_header):
-
-    def find_header_start(line):
-        match = re.search("/\*", line)
-        if match:
-            return True
-        else:
-            return False
-
-    def find_header_end(line):
-        match = re.search("\*/", line)
-        if match:
-            return True
-        else:
-            return False
+    """ Handle c source files.
+    """
+    start, end = generate_c_header_finders()
 
     file_list = find_all_files(start_dir, make_file_extension_match("c"))
     for f in file_list:
         lines = read_file(f)
-        lines = strip_header(lines, find_header_start, find_header_end)
+        lines = strip_header(lines, start, end)
         lines = insert_new_header(lines, new_header)
         write_file(f, lines)
 
 
 def update_all_h_files(start_dir, new_header):
-
-    def find_header_start(line):
-        match = re.search("/\*", line)
-        if match:
-            return True
-        else:
-            return False
-
-    def find_header_end(line):
-        match = re.search("\*/", line)
-        if match:
-            return True
-        else:
-            return False
+    """ Handle c header files.
+    """
+    start, end = generate_c_header_finders()
 
     file_list = find_all_files(start_dir, make_file_extension_match("h"))
     for f in file_list:
         lines = read_file(f)
-        lines = strip_header(lines, find_header_start, find_header_end)
+        lines = strip_header(lines, start, end)
         lines = insert_new_header(lines, new_header)
         write_file(f, lines)
 
 
 def update_all_makefiles(start_dir, new_header):
-
-    def find_header_start(line):
-        match = re.match("##", line)
-        if match:
-            return True
-        else:
-            return False
-
-    def find_header_end(line):
+    """ Handle makefiles.
+    """
+    def find_header_start_and_end(line):
         match = re.match("##", line)
         if match:
             return True
@@ -237,31 +311,44 @@ def update_all_makefiles(start_dir, new_header):
     file_list = find_all_files(start_dir, make_filename_match("makefile"))
     for f in file_list:
         lines = read_file(f)
-        lines = strip_header(lines, find_header_start, find_header_end)
+        lines = strip_header(lines, find_header_start_and_end, 
+                find_header_start_and_end)
         lines = insert_new_header(lines, new_header)
         write_file(f, lines)
 
 
+# Script proper starts here.
+
 parser = argparse.ArgumentParser()
-parser.add_argument("start_dir", help="Directory to start scaning in.")
 parser.add_argument("header_file", help="File containing the new header.")
-parser.add_argument("file_type", help="Files of type to be updated.")
+parser.add_argument("file_type", help="[c|h|cpp|hpp|makefile] File type to be updated.")
+parser.add_argument("--dir", help="Directory to start scaning in. Default is current directory.")
 args = parser.parse_args()
+
+
+if not args.dir:
+    start_dir = "."
+else:
+    start_dir = args.dir
+
 
 header_lines = read_file(args.header_file)
 
+
 if (args.file_type == "cpp"):
-    update_all_cpp_files(args.start_dir, header_lines)
+    update_all_cpp_files(start_dir, header_lines)
 
 elif (args.file_type == "c"):
-    update_all_c_files(args.start_dir, header_lines)
+    update_all_c_files(start_dir, header_lines)
 
 elif (args.file_type == "h"):
-    update_all_h_files(args.start_dir, header_lines)
+    update_all_h_files(start_dir, header_lines)
+
+elif (args.file_type == "hpp"):
+    update_all_hpp_files(start_dir, header_lines)
 
 elif (args.file_type == "makefile"):
-
-    update_all_makefiles(args.start_dir, header_lines)
+    update_all_makefiles(start_dir, header_lines)
 
 else:
     print("Unsupported file type")
