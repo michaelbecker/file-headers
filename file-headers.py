@@ -144,6 +144,10 @@ def strip_header(lines, find_header_start, find_header_end, find_shebang = False
             search_for_header = False
             if find_header_start(l):
                 in_header = True
+                # We need to continue here. If we don't, for files
+                # that have symetric comment delimiters we pick up
+                # the end marker as the same line as the start.
+                continue
 
         if not in_header:
             new_lines.append(l)
@@ -176,7 +180,7 @@ def insert_new_header(file_lines, new_header, find_shebang = False):
     return new_lines
 
 
-def print_lines(line):
+def print_lines(lines):
     """ Debug utility, just print out the lines.
     """
     for l in lines:
